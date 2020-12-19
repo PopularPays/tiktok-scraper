@@ -641,10 +641,13 @@ class TikTokScraper extends events_1.EventEmitter {
         try {
             const response = await this.request(options);
             if (!response) {
+                throw new Error(`An unknown error occurred: ${this.input}`);
+            }
+            else if (response.statusCode === 10202) {
                 throw new Error(`Can't find user: ${this.input}`);
             }
-            if (response.statusCode !== 0) {
-                throw new Error(`Can't find user: ${this.input}`);
+            else if (response.statusCode !== 0) {
+                throw new Error(`An unknown error occurred: ${this.input}`);
             }
             return response.userInfo;
         }
