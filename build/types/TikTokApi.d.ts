@@ -302,3 +302,10 @@ export interface HashtagMetadata {
         viewCount: number;
     };
 }
+export interface WebHtmlUserMetadata {
+    props: {
+        pageProps: {
+            userInfo: UserMetadata;
+        };
+    };
+}

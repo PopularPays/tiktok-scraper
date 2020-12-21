@@ -581,24 +581,9 @@ class TikTokScraper extends events_1.EventEmitter {
                 verifyFp: this.verifyFp,
             };
         }
-        const id = encodeURIComponent(this.input);
-        const query = {
-            uri: `${this.mainHost}node/share/user/@${id}?uniqueId=${id}&verifyFp=${this.verifyFp}`,
-            qs: {
-                user_agent: this.headers['user-agent'],
-            },
-            headers: {
-                cookie: this.getCookies(true),
-            },
-            method: 'GET',
-            json: true,
-        };
         try {
-            const response = await this.request(query);
-            if (response.statusCode !== 0) {
-                throw new Error(`Can't find the user: ${this.input}`);
-            }
-            this.idStore = response.userInfo.user.id;
+            const response = await this.getUserProfileInfo();
+            this.idStore = response.user.id;
             return {
                 id: this.idStore,
                 secUid: '',
@@ -619,34 +604,20 @@ class TikTokScraper extends events_1.EventEmitter {
             throw `Username is missing`;
         }
         const options = {
-            uri: `${this.mainHost}node/share/user/@${this.input}?uniqueId=${this.input}&verifyFp=${this.verifyFp}`,
-            qs: {
-                user_agent: this.headers['user-agent'],
-                screen_width: 1792,
-                screen_height: 1120,
-                browser_language: 'en-US',
-                browser_platform: 'MacIntel',
-                appId: 1233,
-                isIOS: false,
-                isMobile: false,
-                isAndroid: false,
-                appType: 'm',
-                browser_online: true,
-                browser_version: '5.0 (Macintosh)',
-                browser_name: 'Mozilla',
-            },
             method: 'GET',
+            uri: `https://www.tiktok.com/@${this.input}`,
             json: true,
         };
         try {
             const response = await this.request(options);
-            if (!response) {
-                throw new Error(`Can't find user: ${this.input}`);
+            const breakResponse = response
+                .split(`<script id="__NEXT_DATA__" type="application/json" crossorigin="anonymous">`)[1]
+                .split(`</script>`)[0];
+            if (breakResponse) {
+                const userMetadata = JSON.parse(breakResponse);
+                return userMetadata.props.pageProps.userInfo;
             }
-            if (response.statusCode !== 0) {
-                throw new Error(`Can't find user: ${this.input}`);
-            }
-            return response.userInfo;
+            throw new Error(`Can't extract user metadata from the html page`);
         }
         catch (error) {
             throw error.message;
