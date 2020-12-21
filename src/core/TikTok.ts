@@ -920,7 +920,7 @@ export class TikTokScraper extends EventEmitter {
             }
             throw new Error(`Can't extract user metadata from the html page`);
         } catch (error) {
-            throw error.message;
+            throw error;
         }
     }
 
