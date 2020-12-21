@@ -620,7 +620,7 @@ class TikTokScraper extends events_1.EventEmitter {
             throw new Error(`Can't extract user metadata from the html page`);
         }
         catch (error) {
-            throw error.message;
+            throw error;
         }
     }
     async getHashtagInfo() {
