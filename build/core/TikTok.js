@@ -102,7 +102,7 @@ class TikTokScraper extends events_1.EventEmitter {
             case 'hashtag':
                 return this.filepath ? `${this.filepath}/#${this.input}` : `#${this.input}`;
             case 'music':
-                return this.filepath ? `${this.filepath}/music:${this.input}` : `music:${this.input}`;
+                return this.filepath ? `${this.filepath}/music_${this.input}` : `music_${this.input}`;
             case 'trend':
                 return this.filepath ? `${this.filepath}/trend` : `trend`;
             case 'video':
@@ -125,36 +125,30 @@ class TikTokScraper extends events_1.EventEmitter {
         }
     }
     get getProxy() {
-        if (Array.isArray(this.proxy)) {
-            const selectProxy = this.proxy.length ? this.proxy[Math.floor(Math.random() * this.proxy.length)] : '';
-            return {
-                socks: false,
-                proxy: selectProxy,
-            };
-        }
-        if (this.proxy.indexOf('socks4://') > -1 || this.proxy.indexOf('socks5://') > -1) {
+        const selectProxy = Array.isArray(this.proxy) && this.proxy.length ? this.proxy[Math.floor(Math.random() * this.proxy.length)] : this.proxy;
+        if (selectProxy.indexOf('socks4://') > -1 || selectProxy.indexOf('socks5://') > -1) {
             return {
                 socks: true,
-                proxy: new socks_proxy_agent_1.SocksProxyAgent(this.proxy),
+                proxy: new socks_proxy_agent_1.SocksProxyAgent(selectProxy),
             };
         }
         return {
             socks: false,
-            proxy: this.proxy,
+            proxy: selectProxy,
         };
     }
-    request({ uri, method, qs, body, form, headers, json, gzip }) {
+    request({ uri, method, qs, body, form, headers, json, gzip, followAllRedirects, simple = true }, bodyOnly = true) {
         return new Promise(async (resolve, reject) => {
             const proxy = this.getProxy;
             const options = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({ uri,
-                method }, (qs ? { qs } : {})), (body ? { body } : {})), (form ? { form } : {})), { headers: Object.assign(Object.assign({}, this.headers), headers) }), (json ? { json: true } : {})), (gzip ? { gzip: true } : {})), { resolveWithFullResponse: true }), (proxy.proxy && proxy.socks ? { agent: proxy.proxy } : {})), (proxy.proxy && !proxy.socks ? { proxy: `http://${proxy.proxy}/` } : {})), { timeout: 10000, rejectUnauthorized: false });
+                method }, (qs ? { qs } : {})), (body ? { body } : {})), (form ? { form } : {})), { headers: Object.assign(Object.assign({}, this.headers), headers) }), (json ? { json: true } : {})), (gzip ? { gzip: true } : {})), { resolveWithFullResponse: true, followAllRedirects: followAllRedirects || false, simple }), (proxy.proxy && proxy.socks ? { agent: proxy.proxy } : {})), (proxy.proxy && !proxy.socks ? { proxy: `http://${proxy.proxy}/` } : {})), { timeout: 10000, rejectUnauthorized: false });
             try {
                 const response = await request_promise_1.default(options);
                 if (response.headers['x-luminati-ip'] && process.env.TIKTOK_DIRECT_PROXY_ADDRESS) {
                     this.proxy = process.env.TIKTOK_DIRECT_PROXY_ADDRESS.replace('REPLACE_ME_WITH_IP', response.headers['x-luminati-ip']);
                 }
                 setTimeout(() => {
-                    resolve(response.body);
+                    resolve(bodyOnly ? response.body : response);
                 }, this.timeout);
             }
             catch (error) {
@@ -209,39 +203,47 @@ class TikTokScraper extends events_1.EventEmitter {
     }
     withoutWatermark() {
         return new Promise(resolve => {
-            async_1.forEachLimit(this.collector, 5, (item, cb) => {
-                this.extractVideoId(item)
-                    .then(video => {
-                    if (video) {
-                        item.videoUrlNoWaterMark = video;
-                    }
-                    cb(null);
-                })
-                    .catch(() => cb(null));
+            async_1.forEachLimit(this.collector, 5, async (item) => {
+                try {
+                    const videoData = await this.getVideoMetadata(item.webVideoUrl);
+                    item.secretID = videoData.video.id;
+                    item.videoApiUrlNoWaterMark = this.getApiUrlWithoutWatermark(item);
+                    item.videoUrlNoWaterMark = await this.getUrlWithoutTheWatermark(item.videoApiUrlNoWaterMark);
+                }
+                catch (_a) {
+                    throw new Error(`Can't extract unique video id`);
+                }
             }, () => {
-                resolve();
+                resolve(null);
             });
         });
     }
-    async extractVideoId(item) {
-        if (item.createTime > 1595808000) {
-            return null;
+    async getUrlWithoutTheWatermark(uri) {
+        if (!uri) {
+            return '';
         }
+        const options = {
+            uri,
+            method: 'GET',
+            headers: {
+                'user-agent': 'com.zhiliaoapp.musically/2021600040 (Linux; U; Android 5.0; en_US; SM-N900T; Build/LRX21V; Cronet/TTNetVersion:6c7b701a 2020-04-23 QuicVersion:0144d358 2020-03-24)',
+                'sec-fetch-mode': 'navigate',
+            },
+            followAllRedirects: true,
+            simple: false,
+        };
         try {
-            const result = await request_promise_1.default({
-                uri: item.videoUrl,
-            });
-            const position = Buffer.from(result).indexOf('vid:');
-            if (position !== -1) {
-                const id = Buffer.from(result)
-                    .slice(position + 4, position + 36)
-                    .toString();
-                return `https://api2-16-h2.musical.ly/aweme/v1/play/?video_id=${id}&vr_type=0&is_play_url=1&source=PackSourceEnum_PUBLISH&media_type=4${this.hdVideo ? `&ratio=default&improve_bitrate=1` : ''}`;
-            }
+            const response = await this.request(options, false);
+            return response.request.uri.href;
         }
-        catch (_a) {
+        catch (err) {
+            throw new Error(`Can't extract video url without the watermark`);
         }
-        return null;
+    }
+    getApiUrlWithoutWatermark(item) {
+        return item.secretID
+            ? `https://api2-16-h2.musical.ly/aweme/v1/play/?video_id=${item.secretID}&vr_type=0&is_play_url=1&source=PackSourceEnum_PUBLISH&media_type=4${this.hdVideo ? `&ratio=default&improve_bitrate=1` : ''}`
+            : '';
     }
     mainLoop() {
         return new Promise(resolve => {
@@ -276,7 +278,7 @@ class TikTokScraper extends events_1.EventEmitter {
                         break;
                 }
             }, () => {
-                resolve();
+                resolve(null);
             });
         });
     }
@@ -406,12 +408,12 @@ class TikTokScraper extends events_1.EventEmitter {
             try {
                 await bluebird_1.fromCallback(cb => fs_1.writeFile(`${this.historyPath}/${this.storeValue}.json`, JSON.stringify(store), cb));
             }
-            catch (error) {
+            catch (_a) {
             }
             try {
                 await bluebird_1.fromCallback(cb => fs_1.writeFile(`${this.historyPath}/tiktok_history.json`, JSON.stringify(history), cb));
             }
-            catch (error) {
+            catch (_b) {
             }
         }
     }
@@ -424,7 +426,7 @@ class TikTokScraper extends events_1.EventEmitter {
             }
             if (this.noDuplicates.indexOf(posts[i].id) === -1) {
                 this.noDuplicates.push(posts[i].id);
-                const item = Object.assign(Object.assign({ id: posts[i].id, text: posts[i].desc, createTime: posts[i].createTime, authorMeta: {
+                const item = Object.assign(Object.assign({ id: posts[i].id, secretID: posts[i].video.id, text: posts[i].desc, createTime: posts[i].createTime, authorMeta: {
                         id: posts[i].author.id,
                         secUid: posts[i].author.secUid,
                         name: posts[i].author.uniqueId,
@@ -432,6 +434,11 @@ class TikTokScraper extends events_1.EventEmitter {
                         verified: posts[i].author.verified,
                         signature: posts[i].author.signature,
                         avatar: posts[i].author.avatarLarger,
+                        following: posts[i].authorStats.followingCount,
+                        fans: posts[i].authorStats.followerCount,
+                        heart: posts[i].authorStats.heartCount,
+                        video: posts[i].authorStats.videoCount,
+                        digg: posts[i].authorStats.diggCount,
                     } }, (posts[i].music
                     ? {
                         musicMeta: {
@@ -439,17 +446,19 @@ class TikTokScraper extends events_1.EventEmitter {
                             musicName: posts[i].music.title,
                             musicAuthor: posts[i].music.authorName,
                             musicOriginal: posts[i].music.original,
+                            musicAlbum: posts[i].music.album,
                             playUrl: posts[i].music.playUrl,
                             coverThumb: posts[i].music.coverThumb,
                             coverMedium: posts[i].music.coverMedium,
                             coverLarge: posts[i].music.coverLarge,
+                            duration: posts[i].music.duration,
                         },
                     }
                     : {})), { covers: {
                         default: posts[i].video.cover,
                         origin: posts[i].video.originCover,
                         dynamic: posts[i].video.dynamicCover,
-                    }, webVideoUrl: `https://www.tiktok.com/@${posts[i].author.uniqueId}/video/${posts[i].id}`, videoUrl: posts[i].video.downloadAddr, videoUrlNoWaterMark: '', videoMeta: {
+                    }, webVideoUrl: `https://www.tiktok.com/@${posts[i].author.uniqueId}/video/${posts[i].id}`, videoUrl: posts[i].video.downloadAddr, videoUrlNoWaterMark: '', videoApiUrlNoWaterMark: '', videoMeta: {
                         height: posts[i].video.height,
                         width: posts[i].video.width,
                         duration: posts[i].video.duration,
@@ -702,10 +711,7 @@ class TikTokScraper extends events_1.EventEmitter {
         }
         return helpers_1.sign(this.headers['user-agent'], this.input);
     }
-    async getVideoMeta() {
-        if (!this.input) {
-            throw `Url is missing`;
-        }
+    async getVideoMetadataFromHtml() {
         const options = {
             uri: `${this.input}?verifyFp=${this.verifyFp}`,
             method: 'GET',
@@ -750,76 +756,118 @@ class TikTokScraper extends events_1.EventEmitter {
                     throw new Error();
                 }
                 const videoData = short ? videoProps[shortKey].videoData : videoProps.props.pageProps.itemInfo.itemStruct;
-                const videoItem = {
-                    id: videoData.id,
-                    text: videoData.desc,
-                    createTime: videoData.createTime,
-                    authorMeta: {
-                        id: videoData.author.id,
-                        secUid: videoData.author.secUid,
-                        name: videoData.author.uniqueId,
-                        nickName: videoData.author.nickname,
-                        following: videoData.authorStats.followingCount,
-                        fans: videoData.authorStats.followerCount,
-                        heart: videoData.authorStats.heart,
-                        video: videoData.authorStats.videoCount,
-                        digg: videoData.authorStats.diggCount,
-                        verified: videoData.author.verified,
-                        private: videoData.author.secret,
-                        signature: videoData.author.signature,
-                        avatar: videoData.author.avatarLarger,
-                    },
-                    musicMeta: {
-                        musicId: videoData.music.id,
-                        musicName: videoData.music.title,
-                        musicAuthor: videoData.music.authorName,
-                        musicOriginal: videoData.music.original,
-                        coverThumb: videoData.music.coverThumb,
-                        coverMedium: videoData.music.coverMedium,
-                        coverLarge: videoData.music.coverLarge,
-                    },
-                    imageUrl: videoData.video.cover,
-                    videoUrl: videoData.video.playAddr,
-                    videoUrlNoWaterMark: null,
-                    videoMeta: {
-                        width: videoData.video.width,
-                        height: videoData.video.height,
-                        ratio: videoData.video.ratio,
-                        duration: videoData.video.duration,
-                    },
-                    covers: {
-                        default: videoData.video.cover,
-                        origin: videoData.video.originCover,
-                    },
-                    diggCount: videoData.stats.diggCount,
-                    shareCount: videoData.stats.shareCount,
-                    playCount: videoData.stats.playCount,
-                    commentCount: videoData.stats.commentCount,
-                    downloaded: false,
-                    mentions: videoData.desc.match(/(@\w+)/g) || [],
-                    hashtags: videoData.challenges
-                        ? videoData.challenges.map(({ id, title, desc, profileLarger }) => ({
-                            id,
-                            name: title,
-                            title: desc,
-                            cover: profileLarger,
-                        }))
-                        : [],
-                };
-                try {
-                    const video = await this.extractVideoId(videoItem);
-                    videoItem.videoUrlNoWaterMark = video;
-                }
-                catch (error) {
-                }
-                this.collector.push(videoItem);
-                return videoItem;
+                return videoData;
             }
-            throw new Error();
         }
         catch (error) {
-            throw `Can't extract metadata from the video: ${this.input}`;
+            throw `Can't extract video metadata: ${this.input}`;
         }
+        throw new Error();
+    }
+    async getVideoMetadata(url = '') {
+        const videoData = /tiktok.com\/(@[\w.-]+)\/video\/(\d+)/.exec(url || this.input);
+        if (videoData) {
+            const videoUsername = videoData[1];
+            const videoId = videoData[2];
+            const options = {
+                method: 'GET',
+                uri: `https://www.tiktok.com/node/share/video/${videoUsername}/${videoId}`,
+                json: true,
+            };
+            try {
+                const response = await this.request(options);
+                if (response.statusCode === 0) {
+                    return response.itemInfo.itemStruct;
+                }
+            }
+            catch (_a) {
+            }
+        }
+        throw new Error(`Can't extract video metadata: ${this.input}`);
+    }
+    async getVideoMeta(html = true) {
+        if (!this.input) {
+            throw `Url is missing`;
+        }
+        let videoData = {};
+        if (html) {
+            videoData = await this.getVideoMetadataFromHtml();
+        }
+        else {
+            videoData = await this.getVideoMetadata();
+        }
+        const videoItem = {
+            id: videoData.id,
+            secretID: videoData.video.id,
+            text: videoData.desc,
+            createTime: videoData.createTime,
+            authorMeta: {
+                id: videoData.author.id,
+                secUid: videoData.author.secUid,
+                name: videoData.author.uniqueId,
+                nickName: videoData.author.nickname,
+                following: videoData.authorStats.followingCount,
+                fans: videoData.authorStats.followerCount,
+                heart: videoData.authorStats.heartCount,
+                video: videoData.authorStats.videoCount,
+                digg: videoData.authorStats.diggCount,
+                verified: videoData.author.verified,
+                private: videoData.author.secret,
+                signature: videoData.author.signature,
+                avatar: videoData.author.avatarLarger,
+            },
+            musicMeta: {
+                musicId: videoData.music.id,
+                musicName: videoData.music.title,
+                musicAuthor: videoData.music.authorName,
+                musicOriginal: videoData.music.original,
+                coverThumb: videoData.music.coverThumb,
+                coverMedium: videoData.music.coverMedium,
+                coverLarge: videoData.music.coverLarge,
+                duration: videoData.music.duration,
+            },
+            imageUrl: videoData.video.cover,
+            videoUrl: videoData.video.playAddr,
+            videoUrlNoWaterMark: '',
+            videoApiUrlNoWaterMark: '',
+            videoMeta: {
+                width: videoData.video.width,
+                height: videoData.video.height,
+                ratio: videoData.video.ratio,
+                duration: videoData.video.duration,
+                duetEnabled: videoData.duetEnabled,
+                stitchEnabled: videoData.stitchEnabled,
+                duetInfo: videoData.duetInfo,
+            },
+            covers: {
+                default: videoData.video.cover,
+                origin: videoData.video.originCover,
+            },
+            diggCount: videoData.stats.diggCount,
+            shareCount: videoData.stats.shareCount,
+            playCount: videoData.stats.playCount,
+            commentCount: videoData.stats.commentCount,
+            downloaded: false,
+            mentions: videoData.desc.match(/(@\w+)/g) || [],
+            hashtags: videoData.challenges
+                ? videoData.challenges.map(({ id, title, desc, profileLarger }) => ({
+                    id,
+                    name: title,
+                    title: desc,
+                    cover: profileLarger,
+                }))
+                : [],
+        };
+        try {
+            if (this.noWaterMark) {
+                videoItem.videoApiUrlNoWaterMark = this.getApiUrlWithoutWatermark(videoItem);
+                videoItem.videoUrlNoWaterMark = await this.getUrlWithoutTheWatermark(videoItem.videoApiUrlNoWaterMark);
+            }
+        }
+        catch (_a) {
+        }
+        this.collector.push(videoItem);
+        return videoItem;
     }
     sendDataToWebHookUrl() {
         return new Promise(resolve => {
@@ -835,7 +883,7 @@ class TikTokScraper extends events_1.EventEmitter {
                 })
                     .finally(() => cb(null));
             }, () => {
-                resolve();
+                resolve(null);
             });
         });
     }

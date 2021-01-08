@@ -24,6 +24,7 @@ export interface Options {
     proxy?: string[] | string;
     sessionList?: string[];
     proxyFile?: string;
+    sessionFile?: string;
     event?: boolean;
     by_user_id?: boolean;
     download?: boolean;
@@ -86,8 +87,13 @@ export interface Hashtags {
     cover: string[] | string;
 }
 
+export interface DuetInfo {
+    duetFromId: string;
+}
+
 export interface PostCollector {
     id: string;
+    secretID: string;
     text: string;
     createTime: number;
     authorMeta: {
@@ -110,10 +116,12 @@ export interface PostCollector {
         musicName: string;
         musicAuthor: string;
         musicOriginal: boolean;
+        musicAlbum: string;
         playUrl: string;
         coverThumb?: string;
         coverMedium?: string;
         coverLarge?: string;
+        duration?: number;
     };
     covers: {
         default: string;
@@ -123,12 +131,16 @@ export interface PostCollector {
     imageUrl?: string;
     webVideoUrl?: string;
     videoUrl: string;
-    videoUrlNoWaterMark: string | null;
+    videoUrlNoWaterMark?: string;
+    videoApiUrlNoWaterMark?: string;
     videoMeta: {
         width: number;
         height: number;
-        ratio?: number;
+        ratio?: string;
         duration: number;
+        duetEnabled?: boolean;
+        stitchEnabled?: boolean;
+        duetInfo?: DuetInfo;
     };
     diggCount: number;
     shareCount: number;

@@ -49,7 +49,8 @@ export declare class TikTokScraper extends EventEmitter {
     private returnInitError;
     scrape(): Promise<Result | any>;
     private withoutWatermark;
-    private extractVideoId;
+    private getUrlWithoutTheWatermark;
+    private getApiUrlWithoutWatermark;
     private mainLoop;
     private submitScrapingRequest;
     private saveCollectorData;
@@ -69,6 +70,8 @@ export declare class TikTokScraper extends EventEmitter {
     getHashtagInfo(): Promise<HashtagMetadata>;
     getMusicInfo(): Promise<MusicMetadata>;
     signUrl(): Promise<any>;
-    getVideoMeta(): Promise<PostCollector>;
+    private getVideoMetadataFromHtml;
+    private getVideoMetadata;
+    getVideoMeta(html?: boolean): Promise<PostCollector>;
     private sendDataToWebHookUrl;
 }

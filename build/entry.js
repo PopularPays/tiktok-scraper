@@ -49,12 +49,28 @@ const proxyFromFile = async (file) => {
         throw error.message;
     }
 };
+const sessionFromFile = async (file) => {
+    try {
+        const data = (await bluebird_1.fromCallback(cb => fs_1.readFile(file, { encoding: 'utf-8' }, cb)));
+        const proxyList = data.split('\n');
+        if (!proxyList.length || proxyList[0] === '') {
+            throw new Error('Session file is empty');
+        }
+        return proxyList;
+    }
+    catch (error) {
+        throw error.message;
+    }
+};
 const promiseScraper = async (input, type, options = {}) => {
     if (options && typeof options !== 'object') {
         throw new TypeError('Object is expected');
     }
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
+    }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
     }
     const constructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type, input });
     const scraper = new core_1.TikTokScraper(constructor);
@@ -83,6 +99,9 @@ exports.getHashtagInfo = async (input, options = {}) => {
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
     }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
+    }
     const contructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type: 'signle_hashtag', input });
     const scraper = new core_1.TikTokScraper(contructor);
     const result = await scraper.getHashtagInfo();
@@ -94,6 +113,9 @@ exports.getMusicInfo = async (input, options = {}) => {
     }
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
+    }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
     }
     const contructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type: 'single_music', input });
     const scraper = new core_1.TikTokScraper(contructor);
@@ -107,6 +129,9 @@ exports.getUserProfileInfo = async (input, options = {}) => {
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
     }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
+    }
     const contructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type: 'sinsgle_user', input });
     const scraper = new core_1.TikTokScraper(contructor);
     const result = await scraper.getUserProfileInfo();
@@ -118,6 +143,9 @@ exports.signUrl = async (input, options = {}) => {
     }
     if (options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
+    }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
     }
     const contructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type: 'signature', input });
     const scraper = new core_1.TikTokScraper(contructor);
@@ -131,9 +159,13 @@ exports.getVideoMeta = async (input, options = {}) => {
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
     }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
+    }
     const contructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type: 'video_meta', input });
     const scraper = new core_1.TikTokScraper(contructor);
-    const result = await scraper.getVideoMeta();
+    const fullUrl = /^https:\/\/www\.tiktok\.com\/@[\w.-]+\/video\/\d+/.test(input);
+    const result = await scraper.getVideoMeta(!fullUrl);
     return {
         headers: contructor.headers,
         collector: [result],
@@ -145,6 +177,9 @@ exports.video = async (input, options = {}) => {
     }
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
+    }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
     }
     const contructor = Object.assign(Object.assign(Object.assign({}, getInitOptions()), options), { type: 'video', input });
     const scraper = new core_1.TikTokScraper(contructor);
@@ -299,6 +334,9 @@ exports.fromfile = async (input, options = {}) => {
                 by_user_id: true,
             };
         }
+        if (item.indexOf('@') > -1) {
+            item = item.replace(/@/g, '');
+        }
         return {
             type: 'user',
             input: item,
@@ -309,6 +347,9 @@ exports.fromfile = async (input, options = {}) => {
     }
     if (options === null || options === void 0 ? void 0 : options.proxyFile) {
         options.proxy = await proxyFromFile(options === null || options === void 0 ? void 0 : options.proxyFile);
+    }
+    if (options === null || options === void 0 ? void 0 : options.sessionFile) {
+        options.sessionList = await sessionFromFile(options === null || options === void 0 ? void 0 : options.sessionFile);
     }
     const result = await batchProcessor(batch, options);
     return { table: result };
