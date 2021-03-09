@@ -114,8 +114,9 @@ class TikTokScraper extends events_1.EventEmitter {
     get getApiEndpoint() {
         switch (this.scrapeType) {
             case 'user':
+                return `${this.mainHost}api/post/item_list/`;
             case 'trend':
-                return `${this.mainHost}api/item_list/`;
+                return `${this.mainHost}api/recommend/item_list/`;
             case 'hashtag':
                 return `${this.mainHost}api/challenge/item_list/`;
             case 'music':
@@ -125,16 +126,22 @@ class TikTokScraper extends events_1.EventEmitter {
         }
     }
     get getProxy() {
-        const selectProxy = Array.isArray(this.proxy) && this.proxy.length ? this.proxy[Math.floor(Math.random() * this.proxy.length)] : this.proxy;
-        if (selectProxy.indexOf('socks4://') > -1 || selectProxy.indexOf('socks5://') > -1) {
+        const proxy = Array.isArray(this.proxy) && this.proxy.length ? this.proxy[Math.floor(Math.random() * this.proxy.length)] : this.proxy;
+        if (proxy) {
+            if (proxy.indexOf('socks4://') > -1 || proxy.indexOf('socks5://') > -1) {
+                return {
+                    socks: true,
+                    proxy: new socks_proxy_agent_1.SocksProxyAgent(proxy),
+                };
+            }
             return {
-                socks: true,
-                proxy: new socks_proxy_agent_1.SocksProxyAgent(selectProxy),
+                socks: false,
+                proxy,
             };
         }
         return {
             socks: false,
-            proxy: selectProxy,
+            proxy: '',
         };
     }
     request({ uri, method, qs, body, form, headers, json, gzip, followAllRedirects, simple = true }, bodyOnly = true) {
@@ -252,7 +259,7 @@ class TikTokScraper extends events_1.EventEmitter {
                 switch (this.scrapeType) {
                     case 'user':
                         this.getUserId()
-                            .then(query => this.submitScrapingRequest(Object.assign(Object.assign({}, query), { maxCursor: this.maxCursor })))
+                            .then(query => this.submitScrapingRequest(Object.assign(Object.assign({}, query), { cursor: this.maxCursor }), true))
                             .then(() => cb(null))
                             .catch(error => cb(error));
                         break;
@@ -264,7 +271,7 @@ class TikTokScraper extends events_1.EventEmitter {
                         break;
                     case 'trend':
                         this.getTrendingFeedQuery()
-                            .then(query => this.submitScrapingRequest(Object.assign(Object.assign({}, query), { maxCursor: this.maxCursor })))
+                            .then(query => this.submitScrapingRequest(Object.assign({}, query), true))
                             .then(() => cb(null))
                             .catch(error => cb(error));
                         break;
@@ -299,7 +306,7 @@ class TikTokScraper extends events_1.EventEmitter {
             if (this.collector.length >= this.number && this.number !== 0) {
                 throw new Error('Done');
             }
-            this.maxCursor = parseInt(maxCursor === 'undefined' ? cursor : maxCursor, 10);
+            this.maxCursor = parseInt(maxCursor === undefined ? cursor : maxCursor, 10);
         }
         catch (error) {
             throw error.message;
@@ -507,13 +514,9 @@ class TikTokScraper extends events_1.EventEmitter {
     }
     async getTrendingFeedQuery() {
         return {
-            id: '1',
-            secUid: '',
+            aid: 1988,
             lang: '',
-            sourceType: constant_1.default.sourceType.trend,
-            count: this.number > 30 ? 50 : 30,
-            minCursor: 0,
-            maxCursor: 0,
+            count: 30,
             verifyFp: this.verifyFp,
             user_agent: this.headers['user-agent'],
         };
@@ -579,28 +582,25 @@ class TikTokScraper extends events_1.EventEmitter {
     async getUserId() {
         if (this.byUserId || this.idStore) {
             return {
-                id: this.idStore ? this.idStore : this.input,
-                secUid: '',
+                secUid: this.idStore ? this.idStore : this.input,
                 lang: '',
                 aid: 1988,
                 sourceType: constant_1.default.sourceType.user,
                 count: 30,
-                minCursor: 0,
-                maxCursor: 0,
+                cursor: 0,
                 verifyFp: this.verifyFp,
             };
         }
         try {
             const response = await this.getUserProfileInfo();
-            this.idStore = response.user.id;
+            this.idStore = response.user.secUid;
             return {
-                id: this.idStore,
-                secUid: '',
+                aid: 1988,
+                secUid: this.idStore,
                 sourceType: constant_1.default.sourceType.user,
-                count: this.number > 30 ? 50 : 30,
-                minCursor: 0,
-                maxCursor: 0,
+                count: 30,
                 lang: '',
+                cursor: 0,
                 verifyFp: this.verifyFp,
             };
         }
