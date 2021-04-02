@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Downloader = void 0;
 const request_1 = __importDefault(require("request"));
 const request_promise_1 = __importDefault(require("request-promise"));
 const fs_1 = require("fs");
@@ -67,14 +68,20 @@ class Downloader {
                 headers: this.headers,
             })
                 .on('response', response => {
-                if (this.progress && !this.bulk) {
-                    barIndex = this.addBar(!!item.videoUrlNoWaterMark, parseInt(response.headers['content-length'], 10));
+                const len = parseInt(response.headers['content-length'], 10);
+                if (this.progress && !this.bulk && len) {
+                    barIndex = this.addBar(!!item.videoUrlNoWaterMark, len);
+                }
+                if (this.progress && !this.bulk && !len) {
+                    console.log(`Empty response! You can try again with a proxy! Can't download video: ${item.id}`);
                 }
             })
                 .on('data', chunk => {
-                buffer = Buffer.concat([buffer, chunk]);
-                if (this.progress && !this.bulk) {
-                    barIndex.tick(chunk.length, { id: item.id });
+                if (chunk.length) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                    if (this.progress && !this.bulk) {
+                        barIndex.tick(chunk.length, { id: item.id });
+                    }
                 }
             })
                 .on('end', () => {
@@ -99,12 +106,17 @@ class Downloader {
             async_1.forEachLimit(collector, asyncDownload, (item, cb) => {
                 this.toBuffer(item)
                     .then(async (buffer) => {
-                    item.downloaded = true;
-                    if (zip) {
-                        archive.append(buffer, { name: `${item.id}.mp4` });
+                    if (buffer.length) {
+                        item.downloaded = true;
+                        if (zip) {
+                            archive.append(buffer, { name: `${item.id}.mp4` });
+                        }
+                        else {
+                            await bluebird_1.fromCallback(cback => fs_1.writeFile(`${saveDestination}/${item.id}.mp4`, buffer, cback));
+                        }
                     }
                     else {
-                        await bluebird_1.fromCallback(cback => fs_1.writeFile(`${saveDestination}/${item.id}.mp4`, buffer, cback));
+                        item.downloaded = false;
                     }
                     cb(null);
                 })
@@ -118,10 +130,10 @@ class Downloader {
                 }
                 if (zip) {
                     archive.finalize();
-                    archive.on('end', () => resolve());
+                    archive.on('end', () => resolve(''));
                 }
                 else {
-                    resolve();
+                    resolve('');
                 }
             });
         });

@@ -22,6 +22,7 @@ export declare class TikTokScraper extends EventEmitter {
     private storeHistory;
     private historyPath;
     private idStore;
+    private userIdStore;
     Downloader: Downloader;
     private storeValue;
     private maxCursor;
@@ -33,14 +34,14 @@ export declare class TikTokScraper extends EventEmitter {
     private fileName;
     private test;
     private hdVideo;
-    private signature;
     private webHookUrl;
     private method;
     private httpRequests;
     private headers;
     private sessionList;
     private verifyFp;
-    constructor({ download, filepath, filetype, proxy, asyncDownload, cli, event, progress, input, number, type, by_user_id, store_history, historyPath, noWaterMark, fileName, timeout, bulk, zip, test, hdVideo, signature, webHookUrl, method, headers, verifyFp, sessionList, }: TikTokConstructor);
+    private store;
+    constructor({ download, filepath, filetype, proxy, asyncDownload, cli, event, progress, input, number, type, by_user_id, store_history, historyPath, noWaterMark, fileName, timeout, bulk, zip, test, hdVideo, webHookUrl, method, headers, verifyFp, sessionList, }: TikTokConstructor);
     private get fileDestination();
     private get folderDestination();
     private get getApiEndpoint();
@@ -49,8 +50,8 @@ export declare class TikTokScraper extends EventEmitter {
     private returnInitError;
     scrape(): Promise<Result | any>;
     private withoutWatermark;
+    private extractVideoId;
     private getUrlWithoutTheWatermark;
-    private getApiUrlWithoutWatermark;
     private mainLoop;
     private submitScrapingRequest;
     private saveCollectorData;
@@ -58,7 +59,8 @@ export declare class TikTokScraper extends EventEmitter {
         json: any;
         csv: any;
     }): Promise<void>;
-    private storeDownlodProgress;
+    private getDownloadedVideosFromHistory;
+    private storeDownloadProgress;
     private collectPosts;
     private scrapeData;
     private getTrendingFeedQuery;

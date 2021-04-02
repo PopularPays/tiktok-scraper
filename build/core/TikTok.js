@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.TikTokScraper = void 0;
 const request_promise_1 = __importDefault(require("request-promise"));
 const os_1 = require("os");
 const fs_1 = require("fs");
@@ -16,7 +17,7 @@ const constant_1 = __importDefault(require("../constant"));
 const helpers_1 = require("../helpers");
 const core_1 = require("../core");
 class TikTokScraper extends events_1.EventEmitter {
-    constructor({ download, filepath, filetype, proxy, asyncDownload, cli = false, event = false, progress = false, input, number, type, by_user_id = false, store_history = false, historyPath = '', noWaterMark = false, fileName = '', timeout = 0, bulk = false, zip = false, test = false, hdVideo = false, signature = '', webHookUrl = '', method = 'POST', headers, verifyFp = '', sessionList = [], }) {
+    constructor({ download, filepath, filetype, proxy, asyncDownload, cli = false, event = false, progress = false, input, number, type, by_user_id = false, store_history = false, historyPath = '', noWaterMark = false, fileName = '', timeout = 0, bulk = false, zip = false, test = false, hdVideo = false, webHookUrl = '', method = 'POST', headers, verifyFp = '', sessionList = [], }) {
         super();
         this.storeValue = '';
         this.verifyFp = verifyFp;
@@ -35,7 +36,6 @@ class TikTokScraper extends events_1.EventEmitter {
         this.hdVideo = hdVideo;
         this.sessionList = sessionList;
         this.asyncDownload = asyncDownload || 5;
-        this.signature = signature;
         this.asyncScraping = () => {
             switch (this.scrapeType) {
                 case 'user':
@@ -54,6 +54,7 @@ class TikTokScraper extends events_1.EventEmitter {
         this.storeHistory = cli && download && store_history;
         this.historyPath = process.env.SCRAPING_FROM_DOCKER ? '/usr/app/files' : historyPath || os_1.tmpdir();
         this.idStore = '';
+        this.userIdStore = '';
         this.noWaterMark = noWaterMark;
         this.maxCursor = 0;
         this.noDuplicates = [];
@@ -73,6 +74,7 @@ class TikTokScraper extends events_1.EventEmitter {
             good: 0,
             bad: 0,
         };
+        this.store = [];
     }
     get fileDestination() {
         if (this.fileName) {
@@ -197,12 +199,20 @@ class TikTokScraper extends events_1.EventEmitter {
             return this.emit('done', 'completed');
         }
         if (this.storeHistory) {
-            await this.storeDownlodProgress();
+            await this.getDownloadedVideosFromHistory();
         }
         if (this.noWaterMark) {
             await this.withoutWatermark();
         }
         const [json, csv, zip] = await this.saveCollectorData();
+        if (this.storeHistory) {
+            this.collector.forEach(item => {
+                if (this.store.indexOf(item.id) === -1 && item.downloaded) {
+                    this.store.push(item.id);
+                }
+            });
+            await this.storeDownloadProgress();
+        }
         if (this.webHookUrl) {
             await this.sendDataToWebHookUrl();
         }
@@ -212,9 +222,7 @@ class TikTokScraper extends events_1.EventEmitter {
         return new Promise(resolve => {
             async_1.forEachLimit(this.collector, 5, async (item) => {
                 try {
-                    const videoData = await this.getVideoMetadata(item.webVideoUrl);
-                    item.secretID = videoData.video.id;
-                    item.videoApiUrlNoWaterMark = this.getApiUrlWithoutWatermark(item);
+                    item.videoApiUrlNoWaterMark = await this.extractVideoId(item);
                     item.videoUrlNoWaterMark = await this.getUrlWithoutTheWatermark(item.videoApiUrlNoWaterMark);
                 }
                 catch (_a) {
@@ -224,6 +232,27 @@ class TikTokScraper extends events_1.EventEmitter {
                 resolve(null);
             });
         });
+    }
+    async extractVideoId(item) {
+        if (item.createTime > 1595808000) {
+            return '';
+        }
+        try {
+            const result = await request_promise_1.default({
+                uri: item.videoUrl,
+                headers: this.headers,
+            });
+            const position = Buffer.from(result).indexOf('vid:');
+            if (position !== -1) {
+                const id = Buffer.from(result)
+                    .slice(position + 4, position + 36)
+                    .toString();
+                return `https://api2-16-h2.musical.ly/aweme/v1/play/?video_id=${id}&vr_type=0&is_play_url=1&source=PackSourceEnum_PUBLISH&media_type=4${this.hdVideo ? `&ratio=default&improve_bitrate=1` : ''}`;
+            }
+        }
+        catch (_a) {
+        }
+        return '';
     }
     async getUrlWithoutTheWatermark(uri) {
         if (!uri) {
@@ -246,11 +275,6 @@ class TikTokScraper extends events_1.EventEmitter {
         catch (err) {
             throw new Error(`Can't extract video url without the watermark`);
         }
-    }
-    getApiUrlWithoutWatermark(item) {
-        return item.secretID
-            ? `https://api2-16-h2.musical.ly/aweme/v1/play/?video_id=${item.secretID}&vr_type=0&is_play_url=1&source=PackSourceEnum_PUBLISH&media_type=4${this.hdVideo ? `&ratio=default&improve_bitrate=1` : ''}`
-            : '';
     }
     mainLoop() {
         return new Promise(resolve => {
@@ -361,9 +385,25 @@ class TikTokScraper extends events_1.EventEmitter {
             }
         }
     }
-    async storeDownlodProgress() {
+    async getDownloadedVideosFromHistory() {
+        try {
+            const readFromStore = (await bluebird_1.fromCallback(cb => fs_1.readFile(`${this.historyPath}/${this.storeValue}.json`, { encoding: 'utf-8' }, cb)));
+            this.store = JSON.parse(readFromStore);
+        }
+        catch (_a) {
+        }
+        this.collector = this.collector.map(item => {
+            if (this.store.indexOf(item.id) !== -1) {
+                item.repeated = true;
+            }
+            return item;
+        });
+        this.collector = this.collector.filter(item => !item.repeated);
+    }
+    async storeDownloadProgress() {
         const historyType = this.scrapeType === 'trend' ? 'trend' : `${this.scrapeType}_${this.input}`;
-        if (this.storeValue) {
+        const totalNewDownloadedVideos = this.collector.filter(item => item.downloaded).length;
+        if (this.storeValue && totalNewDownloadedVideos) {
             let history = {};
             try {
                 const readFromStore = (await bluebird_1.fromCallback(cb => fs_1.readFile(`${this.historyPath}/tiktok_history.json`, { encoding: 'utf-8' }, cb)));
@@ -387,33 +427,15 @@ class TikTokScraper extends events_1.EventEmitter {
                     file_location: `${this.historyPath}/${this.storeValue}.json`,
                 };
             }
-            let store;
-            try {
-                const readFromStore = (await bluebird_1.fromCallback(cb => fs_1.readFile(`${this.historyPath}/${this.storeValue}.json`, { encoding: 'utf-8' }, cb)));
-                store = JSON.parse(readFromStore);
-            }
-            catch (error) {
-                store = [];
-            }
-            this.collector = this.collector.map(item => {
-                if (store.indexOf(item.id) === -1) {
-                    store.push(item.id);
-                }
-                else {
-                    item.repeated = true;
-                }
-                return item;
-            });
-            this.collector = this.collector.filter(item => !item.repeated);
             history[historyType] = {
                 type: this.scrapeType,
                 input: this.input,
-                downloaded_posts: history[historyType].downloaded_posts + this.collector.length,
+                downloaded_posts: history[historyType].downloaded_posts + totalNewDownloadedVideos,
                 last_change: new Date(),
                 file_location: `${this.historyPath}/${this.storeValue}.json`,
             };
             try {
-                await bluebird_1.fromCallback(cb => fs_1.writeFile(`${this.historyPath}/${this.storeValue}.json`, JSON.stringify(store), cb));
+                await bluebird_1.fromCallback(cb => fs_1.writeFile(`${this.historyPath}/${this.storeValue}.json`, JSON.stringify(this.store), cb));
             }
             catch (_a) {
             }
@@ -488,17 +510,11 @@ class TikTokScraper extends events_1.EventEmitter {
         }
     }
     async scrapeData(qs) {
-        const query = Object.keys(qs)
-            .map(key => `${key}=${qs[key]}`)
-            .join('&');
-        const urlToSign = `${this.getApiEndpoint}?${query}`;
-        const signature = this.signature ? this.signature : helpers_1.sign(this.headers['user-agent'], urlToSign);
-        this.signature = '';
         this.storeValue = this.scrapeType === 'trend' ? 'trend' : qs.id || qs.challengeID || qs.musicID;
         const options = {
             uri: this.getApiEndpoint,
             method: 'GET',
-            qs: Object.assign(Object.assign({}, qs), { _signature: signature }),
+            qs: Object.assign({}, qs),
             headers: {
                 cookie: this.getCookies(true),
             },
@@ -577,11 +593,12 @@ class TikTokScraper extends events_1.EventEmitter {
     }
     getCookies(auth = false) {
         const session = auth ? this.sessionList[Math.floor(Math.random() * this.sessionList.length)] : '';
-        return `${this.headers.cookie}; ${session}`;
+        return `${this.headers.cookie};${session || ''}`;
     }
     async getUserId() {
         if (this.byUserId || this.idStore) {
             return {
+                id: this.userIdStore,
                 secUid: this.idStore ? this.idStore : this.input,
                 lang: '',
                 aid: 1988,
@@ -594,7 +611,9 @@ class TikTokScraper extends events_1.EventEmitter {
         try {
             const response = await this.getUserProfileInfo();
             this.idStore = response.user.secUid;
+            this.userIdStore = response.user.id;
             return {
+                id: this.userIdStore,
                 aid: 1988,
                 secUid: this.idStore,
                 sourceType: constant_1.default.sourceType.user,
@@ -616,11 +635,14 @@ class TikTokScraper extends events_1.EventEmitter {
             method: 'GET',
             uri: `https://www.tiktok.com/@${this.input}`,
             json: true,
+            headers: {
+                cookie: this.getCookies(true),
+            },
         };
         try {
             const response = await this.request(options);
             const breakResponse = response
-                .split(`<script id="__NEXT_DATA__" type="application/json" crossorigin="anonymous">`)[1]
+                .split(/<script id="__NEXT_DATA__" type="application\/json" nonce="[\w-]+" crossorigin="anonymous">/)[1]
                 .split(`</script>`)[0];
             if (breakResponse) {
                 const userMetadata = JSON.parse(breakResponse);
@@ -639,19 +661,10 @@ class TikTokScraper extends events_1.EventEmitter {
         const query = {
             uri: `${this.mainHost}node/share/tag/${this.input}?uniqueId=${this.input}`,
             qs: {
-                user_agent: this.headers['user-agent'],
-                screen_width: 1792,
-                screen_height: 1120,
-                browser_language: 'en-US',
-                browser_platform: 'MacIntel',
                 appId: 1233,
-                isIOS: false,
-                isMobile: false,
-                isAndroid: false,
-                appType: 'm',
-                browser_online: true,
-                browser_version: '5.0 (Macintosh)',
-                browser_name: 'Mozilla',
+            },
+            headers: {
+                cookie: this.getCookies(true),
             },
             method: 'GET',
             json: true,
@@ -674,8 +687,10 @@ class TikTokScraper extends events_1.EventEmitter {
         if (!this.input) {
             throw `Music is missing`;
         }
+        const musicId = /music\/([\w-]+)/.exec(this.input);
+        this.input = musicId ? musicId[1] : `-${this.input}`;
         const query = {
-            uri: `${this.mainHost}node/share/music/-${this.input}`,
+            uri: `${this.mainHost}node/share/music/${this.input}`,
             qs: {
                 user_agent: this.headers['user-agent'],
                 screen_width: 1792,
@@ -687,9 +702,9 @@ class TikTokScraper extends events_1.EventEmitter {
                 isMobile: false,
                 isAndroid: false,
                 appType: 'm',
-                browser_online: true,
-                browser_version: '5.0 (Macintosh)',
-                browser_name: 'Mozilla',
+                aid: 1988,
+                app_name: 'tiktok_web',
+                device_platform: 'web',
             },
             method: 'GET',
             json: true,
@@ -713,56 +728,25 @@ class TikTokScraper extends events_1.EventEmitter {
     }
     async getVideoMetadataFromHtml() {
         const options = {
-            uri: `${this.input}?verifyFp=${this.verifyFp}`,
+            uri: `${this.input}`,
             method: 'GET',
             json: true,
         };
         try {
-            let short = false;
-            let regex;
             const response = await this.request(options);
             if (!response) {
                 throw new Error(`Can't extract video meta data`);
             }
-            if (response.indexOf('<script>window.__INIT_PROPS__ = ') > -1) {
-                short = true;
-            }
-            if (short) {
-                regex = /<script>window.__INIT_PROPS__ = ([^]*)\}<\/script>/.exec(response);
-            }
-            else {
-                regex = /<script id="__NEXT_DATA__" type="application\/json" crossorigin="anonymous">(.+)<\/script><script cros/.exec(response);
-            }
-            if (regex) {
-                const videoProps = JSON.parse(short ? `${regex[1]}}` : regex[1]);
-                let shortKey = '/v/:id';
-                if (short) {
-                    if (videoProps['/v/:id']) {
-                        if (videoProps['/v/:id'].statusCode) {
-                            throw new Error();
-                        }
-                    }
-                    else if (videoProps['/i18n/share/video/:id']) {
-                        shortKey = '/i18n/share/video/:id';
-                        if (videoProps['/i18n/share/video/:id'].statusCode) {
-                            throw new Error();
-                        }
-                    }
-                    else {
-                        throw new Error();
-                    }
-                }
-                else if (videoProps.props.pageProps.statusCode) {
-                    throw new Error();
-                }
-                const videoData = short ? videoProps[shortKey].videoData : videoProps.props.pageProps.itemInfo.itemStruct;
-                return videoData;
-            }
+            const rawVideoMetadata = response
+                .split(/<script id="__NEXT_DATA__" type="application\/json" nonce="[\w-]+" crossorigin="anonymous">/)[1]
+                .split(`</script>`)[0];
+            const videoProps = JSON.parse(rawVideoMetadata);
+            const videoData = videoProps.props.pageProps.itemInfo.itemStruct;
+            return videoData;
         }
         catch (error) {
             throw `Can't extract video metadata: ${this.input}`;
         }
-        throw new Error();
     }
     async getVideoMetadata(url = '') {
         const videoData = /tiktok.com\/(@[\w.-]+)\/video\/(\d+)/.exec(url || this.input);
@@ -860,7 +844,7 @@ class TikTokScraper extends events_1.EventEmitter {
         };
         try {
             if (this.noWaterMark) {
-                videoItem.videoApiUrlNoWaterMark = this.getApiUrlWithoutWatermark(videoItem);
+                videoItem.videoApiUrlNoWaterMark = await this.extractVideoId(videoItem);
                 videoItem.videoUrlNoWaterMark = await this.getUrlWithoutTheWatermark(videoItem.videoApiUrlNoWaterMark);
             }
         }
