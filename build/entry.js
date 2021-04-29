@@ -28,7 +28,7 @@ const getInitOptions = () => {
         timeout: 0,
         tac: '',
         signature: '',
-        verifyFp: constant_1.default.verifyFp(),
+        verifyFp: helpers_1.makeVerifyFp(),
         headers: {
             'user-agent': constant_1.default.userAgent(),
             referer: 'https://www.tiktok.com/',

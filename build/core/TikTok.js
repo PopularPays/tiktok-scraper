@@ -12,15 +12,16 @@ const bluebird_1 = require("bluebird");
 const events_1 = require("events");
 const socks_proxy_agent_1 = require("socks-proxy-agent");
 const async_1 = require("async");
+const url_1 = require("url");
 const constant_1 = __importDefault(require("../constant"));
 const helpers_1 = require("../helpers");
 const core_1 = require("../core");
 class TikTokScraper extends events_1.EventEmitter {
-    constructor({ download, filepath, filetype, proxy, asyncDownload, cli = false, event = false, progress = false, input, number, type, by_user_id = false, store_history = false, historyPath = '', noWaterMark = false, fileName = '', timeout = 0, bulk = false, zip = false, test = false, hdVideo = false, webHookUrl = '', method = 'POST', headers, verifyFp = '', sessionList = [], }) {
+    constructor({ download, filepath, filetype, proxy, asyncDownload, cli = false, event = false, progress = false, input, number, type, by_user_id = false, store_history = false, historyPath = '', noWaterMark = false, useTestEndpoints = false, fileName = '', timeout = 0, bulk = false, zip = false, test = false, hdVideo = false, webHookUrl = '', method = 'POST', headers, verifyFp = '', sessionList = [], }) {
         super();
         this.storeValue = '';
         this.verifyFp = verifyFp;
-        this.mainHost = 'https://m.tiktok.com/';
+        this.mainHost = useTestEndpoints ? 'https://t.tiktok.com/' : 'https://m.tiktok.com/';
         this.headers = headers;
         this.download = download;
         this.filepath = process.env.SCRAPING_FROM_DOCKER ? '/usr/app/files' : filepath || '';
@@ -497,6 +498,11 @@ class TikTokScraper extends events_1.EventEmitter {
                             title: desc,
                             cover: coverLarger,
                         }))
+                        : [], effectStickers: posts[i].effectStickers
+                        ? posts[i].effectStickers.map(({ ID, name }) => ({
+                            id: ID,
+                            name,
+                        }))
                         : [] });
                 if (this.event) {
                     this.emit('data', item);
@@ -510,10 +516,12 @@ class TikTokScraper extends events_1.EventEmitter {
     }
     async scrapeData(qs) {
         this.storeValue = this.scrapeType === 'trend' ? 'trend' : qs.id || qs.challengeID || qs.musicID;
+        const unsignedURL = `${this.getApiEndpoint}?${new url_1.URLSearchParams(qs).toString()}`;
+        const _signature = helpers_1.sign(unsignedURL);
         const options = {
             uri: this.getApiEndpoint,
             method: 'GET',
-            qs: Object.assign({}, qs),
+            qs: Object.assign(Object.assign({}, qs), { _signature }),
             headers: {
                 cookie: this.getCookies(true),
             },
@@ -548,7 +556,6 @@ class TikTokScraper extends events_1.EventEmitter {
             count: 30,
             cursor: 0,
             verifyFp: '',
-            user_agent: this.headers['user-agent'],
         };
     }
     async getHashTagId() {
@@ -559,7 +566,6 @@ class TikTokScraper extends events_1.EventEmitter {
                 cursor: 0,
                 aid: 1988,
                 verifyFp: this.verifyFp,
-                user_agent: this.headers['user-agent'],
             };
         }
         const id = encodeURIComponent(this.input);
@@ -583,7 +589,6 @@ class TikTokScraper extends events_1.EventEmitter {
                 cursor: 0,
                 aid: 1988,
                 verifyFp: this.verifyFp,
-                user_agent: this.headers['user-agent'],
             };
         }
         catch (error) {
@@ -723,7 +728,7 @@ class TikTokScraper extends events_1.EventEmitter {
         if (!this.input) {
             throw `Url is missing`;
         }
-        return helpers_1.sign(this.headers['user-agent'], this.input);
+        return helpers_1.sign(this.input);
     }
     async getVideoMetadataFromHtml() {
         const options = {
@@ -838,6 +843,12 @@ class TikTokScraper extends events_1.EventEmitter {
                     name: title,
                     title: desc,
                     cover: profileLarger,
+                }))
+                : [],
+            effectStickers: videoData.effectStickers
+                ? videoData.effectStickers.map(({ ID, name }) => ({
+                    id: ID,
+                    name,
                 }))
                 : [],
         };

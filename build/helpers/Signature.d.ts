@@ -1,1 +1,1 @@
-export declare function sign(userAgent: string, url: string): any;
+export declare function sign(url: string): any;

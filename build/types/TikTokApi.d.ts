@@ -109,6 +109,7 @@ export interface RequestQuery {
     OS?: string;
     app_name?: string;
     device_platform?: string;
+    _signature?: string;
 }
 export interface VideoProps {
     props: {
@@ -220,6 +221,10 @@ export interface FeedItems {
     duetEnabled: boolean;
     stitchEnabled: boolean;
     duetInfo: DuetInfo;
+    effectStickers: {
+        name: string;
+        ID: string;
+    }[];
 }
 export interface TikTokMetadata {
     statusCode: number;
