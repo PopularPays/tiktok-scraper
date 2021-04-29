@@ -1,7 +1,7 @@
-/* eslint-disable no-param-reassign */
 /* eslint-disable no-console */
-/* eslint-disable no-throw-literal */
 /* eslint-disable no-await-in-loop */
+/* eslint-disable no-underscore-dangle */
+
 import rp, { OptionsWithUri } from 'request-promise';
 import { tmpdir } from 'os';
 import { writeFile, readFile, mkdir } from 'fs';
@@ -11,6 +11,7 @@ import { fromCallback } from 'bluebird';
 import { EventEmitter } from 'events';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { forEachLimit } from 'async';
+import { URLSearchParams } from 'url';
 
 import CONST from '../constant';
 import { sign } from '../helpers';
@@ -132,6 +133,7 @@ export class TikTokScraper extends EventEmitter {
         store_history = false,
         historyPath = '',
         noWaterMark = false,
+        useTestEndpoints = false,
         fileName = '',
         timeout = 0,
         bulk = false,
@@ -146,7 +148,7 @@ export class TikTokScraper extends EventEmitter {
     }: TikTokConstructor) {
         super();
         this.verifyFp = verifyFp;
-        this.mainHost = 'https://m.tiktok.com/';
+        this.mainHost = useTestEndpoints ? 'https://t.tiktok.com/' : 'https://m.tiktok.com/';
         this.headers = headers;
         this.download = download;
         this.filepath = process.env.SCRAPING_FROM_DOCKER ? '/usr/app/files' : filepath || '';
@@ -796,6 +798,12 @@ export class TikTokScraper extends EventEmitter {
                               cover: coverLarger,
                           }))
                         : [],
+                    effectStickers: posts[i].effectStickers
+                        ? posts[i].effectStickers.map(({ ID, name }) => ({
+                              id: ID,
+                              name,
+                          }))
+                        : [],
                 };
 
                 if (this.event) {
@@ -811,11 +819,15 @@ export class TikTokScraper extends EventEmitter {
     private async scrapeData<T>(qs: RequestQuery): Promise<T> {
         this.storeValue = this.scrapeType === 'trend' ? 'trend' : qs.id || qs.challengeID! || qs.musicID!;
 
+        const unsignedURL = `${this.getApiEndpoint}?${new URLSearchParams(qs as any).toString()}`;
+        const _signature = sign(unsignedURL);
+
         const options = {
             uri: this.getApiEndpoint,
             method: 'GET',
             qs: {
                 ...qs,
+                _signature,
             },
             headers: {
                 cookie: this.getCookies(true),
@@ -860,7 +872,6 @@ export class TikTokScraper extends EventEmitter {
             count: 30,
             cursor: 0,
             verifyFp: '',
-            user_agent: this.headers['user-agent'],
         };
     }
 
@@ -875,7 +886,6 @@ export class TikTokScraper extends EventEmitter {
                 cursor: 0,
                 aid: 1988,
                 verifyFp: this.verifyFp,
-                user_agent: this.headers['user-agent'],
             };
         }
         const id = encodeURIComponent(this.input);
@@ -899,7 +909,6 @@ export class TikTokScraper extends EventEmitter {
                 cursor: 0,
                 aid: 1988,
                 verifyFp: this.verifyFp,
-                user_agent: this.headers['user-agent'],
             };
         } catch (error) {
             throw error.message;
@@ -1066,8 +1075,7 @@ export class TikTokScraper extends EventEmitter {
         if (!this.input) {
             throw `Url is missing`;
         }
-
-        return sign(this.headers['user-agent'], this.input);
+        return sign(this.input);
     }
 
     /**
@@ -1202,6 +1210,12 @@ export class TikTokScraper extends EventEmitter {
                       name: title,
                       title: desc,
                       cover: profileLarger,
+                  }))
+                : [],
+            effectStickers: videoData.effectStickers
+                ? videoData.effectStickers.map(({ ID, name }) => ({
+                      id: ID,
+                      name,
                   }))
                 : [],
         } as PostCollector;

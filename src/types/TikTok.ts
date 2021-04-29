@@ -26,6 +26,7 @@ export interface Options {
     proxyFile?: string;
     sessionFile?: string;
     event?: boolean;
+    useTestEndpoints?: boolean;
     by_user_id?: boolean;
     download?: boolean;
     bulk?: boolean;
@@ -53,6 +54,7 @@ export interface TikTokConstructor {
     download: boolean;
     filepath: string;
     filetype: string;
+    useTestEndpoints?: boolean;
     proxy: string[] | string;
     asyncDownload: number;
     asyncScraping: number;
@@ -89,6 +91,11 @@ export interface Hashtags {
 
 export interface DuetInfo {
     duetFromId: string;
+}
+
+export interface EffectStickers {
+    id: string;
+    name: string;
 }
 
 export interface PostCollector {
@@ -150,6 +157,7 @@ export interface PostCollector {
     hashtags: Hashtags[];
     repeated?: boolean;
     downloaded: boolean;
+    effectStickers: EffectStickers[];
 }
 
 export interface Result {
