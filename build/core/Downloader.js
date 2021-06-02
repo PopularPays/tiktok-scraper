@@ -78,7 +78,7 @@ class Downloader {
                 .on('data', chunk => {
                 if (chunk.length) {
                     buffer = Buffer.concat([buffer, chunk]);
-                    if (this.progress && !this.bulk) {
+                    if (this.progress && !this.bulk && barIndex && barIndex.hasOwnProperty('tick')) {
                         barIndex.tick(chunk.length, { id: item.id });
                     }
                 }
