@@ -333,7 +333,7 @@ class TikTokScraper extends events_1.EventEmitter {
             this.maxCursor = parseInt(maxCursor === undefined ? cursor : maxCursor, 10);
         }
         catch (error) {
-            throw error.message;
+            throw error.message ? error.message : error;
         }
     }
     async saveCollectorData() {
@@ -637,7 +637,7 @@ class TikTokScraper extends events_1.EventEmitter {
         }
         const options = {
             method: 'GET',
-            uri: `https://www.tiktok.com/@${this.input}`,
+            uri: `https://www.tiktok.com/@${encodeURIComponent(this.input)}`,
             json: true,
             headers: {
                 cookie: this.getCookies(true),

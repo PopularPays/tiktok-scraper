@@ -33,7 +33,7 @@ const getInitOptions = () => {
             'user-agent': constant_1.default.userAgent(),
             referer: 'https://www.tiktok.com/',
             cookie: `tt_webid_v2=68${helpers_1.makeid(16)}`,
-            'x-secsdk-csrf-token': `${helpers_1.makeid(30)}`,
+            'x-secsdk-csrf-token': `000100000001${helpers_1.makeidHex(80)}`,
         },
     };
 };
@@ -316,7 +316,7 @@ exports.fromfile = async (input, options = {}) => {
                 input: item.split('#')[1],
             };
         }
-        if (/^https:\/\/(www|v[a-z]{1})+\.tiktok\.com\/(\w.+|@(\w.+)\/video\/(\d+))$/.test(item)) {
+        if (/^https:\/\/(www|v[a-z]{1}|[a-z])+\.(tiktok|tiktokv)\.com\/@?\w.+\/video\/(\d+)(.+)?$/.test(item)) {
             return {
                 type: 'video',
                 input: item,
