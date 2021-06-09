@@ -32,8 +32,6 @@ const getInitOptions = () => {
         headers: {
             'user-agent': constant_1.default.userAgent(),
             referer: 'https://www.tiktok.com/',
-            cookie: `tt_webid_v2=68${helpers_1.makeid(16)}`,
-            'x-secsdk-csrf-token': `000100000001${helpers_1.makeidHex(80)}`,
         },
     };
 };
@@ -168,7 +166,7 @@ exports.getVideoMeta = async (input, options = {}) => {
     const fullUrl = /^https:\/\/www\.tiktok\.com\/@[\w.-]+\/video\/\d+/.test(input);
     const result = await scraper.getVideoMeta(!fullUrl);
     return {
-        headers: contructor.headers,
+        headers: Object.assign(Object.assign({}, scraper.headers), { cookie: scraper.cookieJar.getCookieString('https://tiktok.com') }),
         collector: [result],
     };
 };

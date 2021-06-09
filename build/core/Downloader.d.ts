@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import { CookieJar } from 'request';
 import { MultipleBar } from '../helpers';
 import { DownloaderConstructor, PostCollector, DownloadParams, Headers } from '../types';
 export declare class Downloader {
@@ -10,7 +11,8 @@ export declare class Downloader {
     filepath: string;
     bulk: boolean;
     headers: Headers;
-    constructor({ progress, proxy, noWaterMark, headers, filepath, bulk }: DownloaderConstructor);
+    cookieJar: CookieJar;
+    constructor({ progress, proxy, noWaterMark, headers, filepath, bulk, cookieJar }: DownloaderConstructor);
     private get getProxy();
     addBar(type: boolean, len: number): any[];
     toBuffer(item: PostCollector): Promise<Buffer>;

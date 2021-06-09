@@ -1,9 +1,11 @@
 /// <reference types="node" />
+import { CookieJar } from 'request';
 import { EventEmitter } from 'events';
-import { PostCollector, TikTokConstructor, Result, MusicMetadata, UserMetadata, HashtagMetadata } from '../types';
+import { PostCollector, TikTokConstructor, Result, MusicMetadata, UserMetadata, HashtagMetadata, Headers } from '../types';
 import { Downloader } from '../core';
 export declare class TikTokScraper extends EventEmitter {
     private mainHost;
+    private userIdStore;
     private download;
     private filepath;
     private json2csvParser;
@@ -22,7 +24,6 @@ export declare class TikTokScraper extends EventEmitter {
     private storeHistory;
     private historyPath;
     private idStore;
-    private userIdStore;
     Downloader: Downloader;
     private storeValue;
     private maxCursor;
@@ -30,6 +31,8 @@ export declare class TikTokScraper extends EventEmitter {
     private noDuplicates;
     private timeout;
     private bulk;
+    private validHeaders;
+    private csrf;
     private zip;
     private fileName;
     private test;
@@ -37,10 +40,11 @@ export declare class TikTokScraper extends EventEmitter {
     private webHookUrl;
     private method;
     private httpRequests;
-    private headers;
+    headers: Headers;
     private sessionList;
     private verifyFp;
     private store;
+    cookieJar: CookieJar;
     constructor({ download, filepath, filetype, proxy, asyncDownload, cli, event, progress, input, number, type, by_user_id, store_history, historyPath, noWaterMark, useTestEndpoints, fileName, timeout, bulk, zip, test, hdVideo, webHookUrl, method, headers, verifyFp, sessionList, }: TikTokConstructor);
     private get fileDestination();
     private get folderDestination();
@@ -62,11 +66,11 @@ export declare class TikTokScraper extends EventEmitter {
     private getDownloadedVideosFromHistory;
     private storeDownloadProgress;
     private collectPosts;
+    private getValidHeaders;
     private scrapeData;
     private getTrendingFeedQuery;
     private getMusicFeedQuery;
     private getHashTagId;
-    private getCookies;
     private getUserId;
     getUserProfileInfo(): Promise<UserMetadata>;
     getHashtagInfo(): Promise<HashtagMetadata>;

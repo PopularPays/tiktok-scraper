@@ -1,3 +1,4 @@
+import { CookieJar } from 'request';
 import { PostCollector, Headers } from '.';
 export interface DownloaderConstructor {
     progress: boolean;
@@ -6,6 +7,7 @@ export interface DownloaderConstructor {
     headers: Headers;
     filepath: string;
     bulk: boolean;
+    cookieJar: CookieJar;
 }
 export interface DownloadParams {
     zip: boolean;
